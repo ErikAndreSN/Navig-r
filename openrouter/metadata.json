@@ -1,0 +1,5 @@
+{
+  "name": "OpenRouter",
+  "description": "An advanced prompt generator that transforms simple instructions into detailed, professional prompts for AI models like ChatGPT, Claude, and Gemini. This tool helps users structure their requests for better, more accurate results.",
+  "requestFramePermissions": []
+}

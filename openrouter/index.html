@@ -1,0 +1,57 @@
+
+<!DOCTYPE html>
+<html lang="no" class="bg-brand-bg">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>prompt-veilederen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Inter:wght@400;500;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'sans': ['Inter', 'sans-serif'],
+              'serif': ['Playfair Display', 'serif'],
+              'script': ['Caveat', 'cursive'],
+            },
+            colors: {
+              'brand-bg': '#F7F7F7',
+              'brand-card': '#FFFFFF',
+              'brand-text-dark': '#1F2937',
+              'brand-text-light': '#6B7280',
+              'brand-border': '#E5E7EB',
+              'brand-primary': '#F59E0B',
+              'brand-primary-dark': '#D97706',
+              'brand-button-bg': '#1F2937',
+              'brand-button-text': '#FFFFFF',
+              'brand-feedback-bg': '#F9F5F1',
+              'brand-feedback-border': '#E5E0DA'
+            },
+            boxShadow: {
+              'soft': '0 1px 3px 0 rgb(0 0 0 / 0.05)',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-brand-bg font-sans text-brand-text-dark">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
