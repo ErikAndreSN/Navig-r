@@ -1,16 +1,18 @@
-
-import { GoogleGenAI } from "@google/genai";
+import { OpenRouter } from "@openrouter/sdk";
 import { Question } from '../types';
 
-const API_KEY = process.env.API_KEY;
+// Sett inn din gratis API-nøkkel her
+const API_KEY = "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";
 
-if (!API_KEY) {
-  console.warn("API_KEY environment variable not set. Using a placeholder.");
-}
+const openrouter = new OpenRouter({
+  apiKey: API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": "http://localhost:5173", // Valgfritt: Nettsiden din
+    "X-Title": "Navig-r",
+  }
+});
 
-const ai = new GoogleGenAI({ apiKey: API_KEY || 'YOUR_API_KEY' });
-const model = 'gemini-3-flash-preview';
-
+const MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
 export const generateClarifyingQuestions = async (lazyPrompt: string): Promise<Question[]> => {
     const questionPrompt = `
@@ -20,55 +22,36 @@ export const generateClarifyingQuestions = async (lazyPrompt: string): Promise<Q
         - "id": a unique number for each question (1, 2, 3).
         - "title": a string, the question itself, in Norwegian.
         - "description": a string, a short one-sentence explanation of why the question is being asked, in Norwegian.
-        - "placeholder": a string, giving the user a hint about what to write, in Norwegian (e.g., 'Type your answer here...').
+        - "placeholder": a string, giving the user a hint about what to write, in Norwegian.
         - "examples": an array of 3 short, helpful string examples for the user to click, in Norwegian.
 
-        Do not include any other text, explanations, or markdown formatting outside of the JSON array itself. The output must be parsable as JSON.
-
-        Here is the user's lazy prompt: "${lazyPrompt}"
+        Return ONLY the JSON array.
+        Lazy prompt: "${lazyPrompt}"
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: questionPrompt,
-            config: {
-                responseMimeType: "application/json",
-            }
+        const response = await openrouter.chat.send({
+            model: MODEL,
+            messages: [{ role: "user", content: questionPrompt }]
         });
 
-        if (!response || !response.text) {
-             throw new Error("Received an empty response from the API when generating questions.");
-        }
-        
-        // Sanitize response by removing markdown backticks if present
-        const sanitizedText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const text = response.choices[0]?.message?.content || "";
+        const sanitizedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const questions = JSON.parse(sanitizedText);
-
-        if (!Array.isArray(questions) || questions.length === 0) {
-            throw new Error("API did not return a valid array of questions.");
-        }
         
         return questions.map((q: any, index: number) => ({
             id: q.id || index + 1,
-            title: q.title || 'Untitled Question',
-            description: q.description || 'Please provide more details.',
-            placeholder: q.placeholder || 'Your answer here...',
+            title: q.title || 'Uten navn',
+            description: q.description || 'Vennligst utdyp.',
+            placeholder: q.placeholder || 'Skriv her...',
             examples: q.examples || []
         }));
 
     } catch (error) {
-        console.error("Error generating clarifying questions:", error);
-         if (error instanceof Error) {
-            if(error.message.includes('API key not valid')) {
-                throw new Error('API-nøkkelen er ugyldig. Vennligst sjekk konfigurasjonen din.');
-            }
-            throw new Error(`Kunne ikke generere spørsmål: ${error.message}`);
-        }
-        throw new Error("En ukjent feil oppstod under generering av spørsmål.");
+        console.error("OpenRouter Error (Questions):", error);
+        throw new Error("Kunne ikke generere spørsmål via OpenRouter.");
     }
 }
-
 
 export const generatePrompt = async (
     lazyPrompt: string,
@@ -77,7 +60,7 @@ export const generatePrompt = async (
     refinement: string
 ): Promise<string> => {
   const contextFromAnswers = questions.map((q, index) => {
-    if (answers[index] && answers[index].trim() !== '') {
+    if (answers[index]?.trim()) {
       return `- Spørsmål: ${q.title}\n- Svar: ${answers[index]}`;
     }
     return null;
@@ -85,51 +68,29 @@ export const generatePrompt = async (
 
   const fullPrompt = `
     Rolle: Du er en "prompt-veileder", en ekspert i å lage presise og effektive instruksjoner for AI-modeller.
+    Oppgave: Transformer den følgende enkle bruker-prompten til en profesjonell prompt.
 
-    Oppgave: Transformer den følgende enkle bruker-prompten, og eventuelle svar, til en detaljert og velstrukturert "profesjonell prompt".
+    Brukerens opprinnelige prompt: "${lazyPrompt}"
+    Svar på spørsmål: ${contextFromAnswers || "Ingen svar."}
+    Justeringer: ${refinement || "Ingen."}
 
-    Brukerens opprinnelige prompt:
-    "${lazyPrompt}"
+    Krav:
+    1. Overskrifter: **Situasjon**, **Oppgave**, **Mål**, **Kunnskap**.
+    2. Under **Kunnskap**, bruk punktliste med fet skrift for nøkkelbegreper.
+    3. Avslutt med "Assistenten skal levere:" og en nummerert liste.
 
-    Brukerens svar på oppfølgingsspørsmål:
-    ${contextFromAnswers || "Ingen svar gitt."}
-
-    Eventuelle siste justeringer fra brukeren:
-    ${refinement || "Ingen spesifikke justeringer."}
-
-
-    Krav til den nye prompten:
-    1.  **Innhold og Struktur:**
-        - Prompten MÅ inneholde følgende hovedseksjoner med fete overskrifter, i denne rekkefølgen: **Situasjon**, **Oppgave**, **Mål**, **Kunnskap**.
-        - Under **Kunnskap**, bruk en punktliste (med bindestrek). Hvert punkt bør starte med et nøkkelbegrep i fet skrift, etterfulgt av en kolon (f.eks. "- **E-handel og UX-design:** Beste praksis...").
-        - Etter **Kunnskap**-seksjonen, legg til en linje "Assistenten skal levere:" fulgt av en nummerert liste (f.eks. 1. Punkt én) over konkrete leveranser.
-    2.  **Formatering:** Bruk kun standard Markdown. Ikke bruk noen annen formatering enn det som er beskrevet over.
-    3.  **Klarhet:** Definer oppgaven presist basert på all tilgjengelig informasjon.
-    4.  **Tone:** Hold en profesjonell og instruerende tone.
-
-    Viktig: Ikke legg til en introduksjon som "Her er den forbedrede prompten:". Returner KUN selve den ferdige, strukturerte prompten i Markdown-format.
+    Returner KUN selve prompten i Markdown.
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: fullPrompt,
+    const response = await openrouter.chat.send({
+      model: MODEL,
+      messages: [{ role: "user", content: fullPrompt }]
     });
-    
-    if (response && response.text) {
-        return response.text.trim();
-    } else {
-        throw new Error("Received an empty response from the API.");
-    }
 
+    return response.choices[0]?.message?.content?.trim() || "Feil under generering.";
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    if (error instanceof Error) {
-        if(error.message.includes('API key not valid')) {
-            throw new Error('API-nøkkelen er ugyldig. Vennligst sjekk konfigurasjonen din.');
-        }
-        throw new Error(`Kunne ikke generere prompt: ${error.message}`);
-    }
-    throw new Error("En ukjent feil oppstod under kommunikasjon med Gemini API.");
+    console.error("OpenRouter Error (Prompt):", error);
+    throw new Error("Kunne ikke generere prompt via OpenRouter.");
   }
 };
